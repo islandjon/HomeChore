@@ -1,4 +1,5 @@
-name: Docker Compose CI
+name: Docker Compose Action
+uses: hoverkraft-tech/compose-action@v2.2.0
 
 on:
   push:
