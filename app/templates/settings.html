@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+  <h1 class="mt-4">Settings</h1>
+  <form action="{{ url_for('settings') }}" method="post">
+    <div class="form-group">
+      <label for="timezoneSelect">Select Time Zone</label>
+      <select class="form-control" id="timezoneSelect" name="timezone">
+        {% for tz in timezones %}
+          <option value="{{ tz }}" {% if tz == current_tz %}selected{% endif %}>{{ tz }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+  </form>
+{% endblock %}
