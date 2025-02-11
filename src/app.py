@@ -1,58 +1,22 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from datetime import datetime, timedelta
 import pytz
 import os
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://postgres:mysecretpassword@192.168.1.223:5432/choredb')
-app.secret_key = 'your-secret-key'  # Needed for sessions
-db = SQLAlchemy(app)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://postgres:postgres@0.0.0.0:5432/choredb')
+app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')  # Needed for sessions
 
+# Import the models from models.py
+from models import db, Household, User, Chore, Notification
 
-class Household(db.Model):
-    __tablename__ = 'households'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False, unique=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+# Initialize the database with the app
+db.init_app(app)
 
-
-class User(db.Model):
-    __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
-    household_id = db.Column(db.Integer, db.ForeignKey(
-        'households.id'), nullable=False)
-    username = db.Column(db.String(255), unique=True, nullable=False)
-    email = db.Column(db.String(255), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-class Chore(db.Model):
-    __tablename__ = 'chores'
-    id = db.Column(db.Integer, primary_key=True)
-    household_id = db.Column(db.Integer, db.ForeignKey(
-        'households.id'), nullable=False)
-    name = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    frequency = db.Column(db.Interval)  # e.g., timedelta(days=...)
-    last_completed = db.Column(db.DateTime)
-    assigned_to = db.Column(db.Integer, db.ForeignKey('users.id'))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-class Notification(db.Model):
-    __tablename__ = 'notifications'
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    chore_id = db.Column(db.Integer, db.ForeignKey('chores.id'), nullable=True)
-    message = db.Column(db.Text, nullable=False)
-    read = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-# ---------------------------
-# Existing Routes (e.g. dashboard, add_chore, etc.)
-# ---------------------------
-
+# Initialize the migration engine
+migrate = Migrate(app, db)
 
 @app.route('/')
 def dashboard():
@@ -90,8 +54,8 @@ def dashboard():
 
         # Determine who completed it last.
         if chore.assigned_to:
-            user = User.query.get(chore.assigned_to)
-            last_completed_by = user.username if user else "Unknown"
+            user_obj = User.query.get(chore.assigned_to)
+            last_completed_by = user_obj.username if user_obj else "Unknown"
         else:
             last_completed_by = "N/A"
 
@@ -122,8 +86,6 @@ def dashboard():
                            other_tasks=other_tasks,
                            timezone=tz_name)
 
-
-
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
     # Define a list of common time zones for simplicity.
@@ -139,7 +101,6 @@ def settings():
     current_tz = session.get('timezone', 'UTC')
     return render_template('settings.html', timezones=common_timezones, current_tz=current_tz)
 
-
 @app.route('/complete_chore', methods=['POST'])
 def complete_chore():
     chore_id = request.form.get('chore_id')
@@ -154,7 +115,6 @@ def complete_chore():
         db.session.add(notif)
         db.session.commit()
     return redirect(url_for('dashboard'))
-
 
 @app.route('/add_chore', methods=['GET', 'POST'])
 def add_chore():
@@ -182,15 +142,13 @@ def add_chore():
         households = Household.query.all()
         return render_template('add_chore.html', households=households)
 
-
 @app.route('/add_user', methods=['GET', 'POST'])
 def add_user():
     if request.method == 'POST':
         household_id = request.form.get('household_id')
         username = request.form.get('username')
         email = request.form.get('email')
-        new_user = User(household_id=household_id,
-                        username=username, email=email)
+        new_user = User(household_id=household_id, username=username, email=email)
         db.session.add(new_user)
         db.session.commit()
         return redirect(url_for('dashboard'))
@@ -198,13 +156,11 @@ def add_user():
         households = Household.query.all()
         return render_template('add_user.html', households=households)
 
-
 @app.route('/manage_chores')
 def manage_chores():
     # List all chores in a table
     chores = Chore.query.all()
     return render_template('manage_chores.html', chores=chores)
-
 
 @app.route('/edit_chore/<int:chore_id>', methods=['GET', 'POST'])
 def edit_chore(chore_id):
@@ -221,7 +177,6 @@ def edit_chore(chore_id):
         return redirect(url_for('manage_chores'))
     return render_template('edit_chore.html', chore=chore)
 
-
 @app.route('/delete_chore/<int:chore_id>', methods=['POST'])
 def delete_chore(chore_id):
     chore = Chore.query.get_or_404(chore_id)
@@ -229,12 +184,10 @@ def delete_chore(chore_id):
     db.session.commit()
     return redirect(url_for('manage_chores'))
 
-
 @app.route('/manage_users')
 def manage_users():
     users = User.query.all()
     return render_template('manage_users.html', users=users)
-
 
 @app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
 def edit_user(user_id):
@@ -248,7 +201,6 @@ def edit_user(user_id):
     households = Household.query.all()
     return render_template('edit_user.html', user=user, households=households)
 
-
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
@@ -256,6 +208,47 @@ def delete_user(user_id):
     db.session.commit()
     return redirect(url_for('manage_users'))
 
+# Initial setup CLI command
+@app.cli.command("setup")
+def setup():
+    """
+    Perform initial setup:
+    - Create a default household, user, and a few chores if none exist.
+    Run with: flask setup
+    """
+    if Household.query.first():
+        print("Initial setup already completed.")
+        return
+
+    # Create default household
+    household = Household(name="Default Household")
+    db.session.add(household)
+    db.session.commit()
+
+    # Create default user
+    user = User(household_id=household.id, username="admin", email="admin@example.com")
+    db.session.add(user)
+    db.session.commit()
+
+    # Create default chores
+    chore1 = Chore(
+        household_id=household.id,
+        name="Clean Kitchen",
+        description="Clean all surfaces and mop the floor.",
+        frequency=timedelta(days=1),
+        assigned_to=user.id
+    )
+    chore2 = Chore(
+        household_id=household.id,
+        name="Do Laundry",
+        description="Wash, dry, and fold clothes.",
+        frequency=timedelta(days=2),
+        assigned_to=user.id
+    )
+    db.session.add_all([chore1, chore2])
+    db.session.commit()
+
+    print("Initial setup completed: Default household, user, and chores created.")
 
 if __name__ == '__main__':
     app.run(debug=True)

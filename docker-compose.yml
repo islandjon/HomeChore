@@ -1,15 +1,5 @@
-version: '3.9'
+version: '3.11'
 services:
-  web:
-    build: .
-    ports:
-      - "5000:5000"
-    depends_on:
-      - db
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db/choredb
-      - FLASK_APP=app.py
-      - FLASK_ENV=development
   db:
     image: postgres:14
     environment:
@@ -20,5 +10,17 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+  web:
+    build: .
+    ports:
+      - "5001:5000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/choredb
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+    command: sh -c "flask db upgrade && flask setup && flask run"
+
 volumes:
   pgdata:

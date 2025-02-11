@@ -9,7 +9,7 @@ COPY requirements.txt requirements.txt
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # Copy the current directory contents into the container at /app
-COPY . .
+COPY src/. .
 
 # Set environment variables for Flask
 ENV FLASK_APP=app.py
@@ -18,5 +18,5 @@ ENV FLASK_RUN_HOST=0.0.0.0
 # Expose port 5000 for the Flask app
 EXPOSE 5000
 
-# Run the Flask app when the container launches
-CMD ["flask", "run"]
+# Run the migration and then the Flask app when the container launches
+CMD ["sh", "-c", "flask db upgrade && flask run"]
