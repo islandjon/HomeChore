@@ -39,18 +39,18 @@ def dashboard():
         if not chore.frequency:
             continue
 
-        # If the chore was completed, convert its time to the user's timezone.
-        if chore.last_completed:
+        # If there is no last_completed value, treat this chore as due today.
+        if not chore.last_completed:
+            due_date_date = today_date
+            last_completed_str = "Never"
+        else:
             last_completed_local = chore.last_completed.replace(tzinfo=pytz.utc).astimezone(timezone)
-            # Skip this chore if it was completed today.
+            # If the chore was completed today, skip it (already done).
             if last_completed_local.date() == today_date:
                 continue
             due_date = last_completed_local + chore.frequency
             last_completed_str = last_completed_local.strftime("%Y-%m-%d %H:%M:%S %Z")
-        else:
-            created_local = chore.created_at.replace(tzinfo=pytz.utc).astimezone(timezone)
-            due_date = created_local + chore.frequency
-            last_completed_str = "Never"
+            due_date_date = due_date.date()
 
         # Determine who completed it last.
         if chore.assigned_to:
@@ -59,17 +59,17 @@ def dashboard():
         else:
             last_completed_by = "N/A"
 
-        due_date_date = due_date.date()
-
+        # Prepare the chore dictionary.
         chore_dict = {
             'id': chore.id,
             'name': chore.name,
             'description': chore.description,
             'last_completed': last_completed_str,
             'last_completed_by': last_completed_by,
-            'due_date': due_date.strftime("%Y-%m-%d %H:%M:%S %Z")
+            'due_date': "Today" if due_date_date == today_date else due_date_date.strftime("%Y-%m-%d")
         }
 
+        # Categorize based on the due_date.
         if due_date_date == today_date:
             due_today.append(chore_dict)
         elif today_date < due_date_date <= today_date + timedelta(days=3):
@@ -85,6 +85,7 @@ def dashboard():
                            due_next_week=due_next_week,
                            other_tasks=other_tasks,
                            timezone=tz_name)
+
 
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
