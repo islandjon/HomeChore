@@ -27,6 +27,21 @@
     border: 2px solid #0d6efd;
     background-color: rgba(13,110,253,0.1);
   }
+  @media (max-width: 768px) {
+    .col-3 {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+    .card {
+      margin-bottom: 1rem;
+    }
+    .row {
+      flex-direction: column;
+    }
+    .section-title {
+      display: none;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -37,7 +52,7 @@
 <div class="row">
   <!-- Column 1: Due Today -->
   <div class="col-3">
-    <h3>Due Today</h3>
+    <h3 class="section-title">Due Today</h3>
     {% for chore in due_today %}
     <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
       <div class="card-body">
@@ -56,7 +71,7 @@
   
   <!-- Column 2: Next 3 Days -->
   <div class="col-3">
-    <h3>Next 3 Days</h3>
+    <h3 class="section-title">Next 3 Days</h3>
     {% for chore in due_next_3 %}
     <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
       <div class="card-body">
@@ -75,7 +90,7 @@
   
   <!-- Column 3: Next Week -->
   <div class="col-3">
-    <h3>Next Week</h3>
+    <h3 class="section-title">Next Week</h3>
     {% for chore in due_next_week %}
     <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
       <div class="card-body">
@@ -94,7 +109,7 @@
   
   <!-- Column 4: Other Tasks -->
   <div class="col-3">
-    <h3>Other Tasks</h3>
+    <h3 class="section-title">Other Tasks</h3>
     {% for chore in other_tasks %}
     <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
       <div class="card-body">
