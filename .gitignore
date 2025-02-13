@@ -65,3 +65,6 @@ Thumbs.db
 
 # Docker related files that you might want to ignore (adjust if needed)
 docker-compose.override.yml
+
+src/static/avatars/*
+!src/static/avatars/default_avatar.png

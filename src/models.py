@@ -19,10 +19,11 @@ class User(db.Model):
     household_id = db.Column(db.Integer, db.ForeignKey('households.id'), nullable=False)
     username = db.Column(db.String(255), unique=True, nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=False)
+    avatar = db.Column(db.String(255), nullable=True, default="default_avatar.png")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Notifications for this user
     notifications = db.relationship("Notification", backref="user", lazy=True)
+
 
 class Chore(db.Model):
     __tablename__ = 'chores'
