@@ -47,14 +47,12 @@ def dashboard():
             due_date_date = today_date
             last_completed_str = "Never"
         else:
-            last_completed_local = chore.last_completed.replace(
-                tzinfo=pytz.utc).astimezone(timezone)
+            last_completed_local = chore.last_completed.replace(tzinfo=pytz.utc).astimezone(timezone)
             # If the chore was completed today, skip it (already done).
             if last_completed_local.date() == today_date:
                 continue
             due_date = last_completed_local + chore.frequency
-            last_completed_str = last_completed_local.strftime(
-                "%Y-%m-%d %H:%M:%S %Z")
+            last_completed_str = last_completed_local.strftime("%Y-%m-%d %H:%M:%S %Z")
             due_date_date = due_date.date()
 
         # Determine who completed it last.
@@ -71,11 +69,11 @@ def dashboard():
             'description': chore.description,
             'last_completed': last_completed_str,
             'last_completed_by': last_completed_by,
-            'due_date': "Today" if due_date_date == today_date else due_date_date.strftime("%Y-%m-%d")
+            'due_date': "Today" if due_date_date <= today_date else due_date_date.strftime("%Y-%m-%d")
         }
 
         # Categorize based on the due_date.
-        if due_date_date == today_date:
+        if due_date_date <= today_date:
             due_today.append(chore_dict)
         elif today_date < due_date_date <= today_date + timedelta(days=3):
             due_next_3.append(chore_dict)
@@ -90,6 +88,7 @@ def dashboard():
                            due_next_week=due_next_week,
                            other_tasks=other_tasks,
                            timezone=tz_name)
+
 
 
 @app.route('/settings', methods=['GET', 'POST'])
