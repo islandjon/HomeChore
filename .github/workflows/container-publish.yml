@@ -18,10 +18,10 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build -t ghcr.io/islandjon/HomeChore:latest .
-          docker tag ghcr.io/islandjon/HomeChore:latest ghcr.io/islandjon/HomeChore:$(date +%Y%m%d)
+          docker build -t ghcr.io/islandjon/homechore:latest .
+          docker tag ghcr.io/islandjon/homechore:latest ghcr.io/islandjon/homechore:$(date +%Y%m%d)
 
       - name: Push Docker Image
         run: |
-          docker push ghcr.io/islandjon/HomeChore:latest
-          docker push ghcr.io/islandjon/HomeChore:$(date +%Y%m%d)
+          docker push ghcr.io/islandjon/homechore:latest
+          docker push ghcr.io/islandjon/homechore:$(date +%Y%m%d)
