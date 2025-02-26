@@ -15,6 +15,33 @@
     transform: scale(1.02);
     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
   }
+  /* Optional: style the user selection buttons */
+  .user-select-btn {
+    border: none;
+    background: none;
+  }
+  .user-select-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  .user-select-btn.selected {
+    border: 2px solid #0d6efd;
+    background-color: rgba(13,110,253,0.1);
+  }
+  @media (max-width: 768px) {
+    .col-3 {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+    .card {
+      margin-bottom: 1rem;
+    }
+    .row {
+      flex-direction: column;
+    }
+    .section-title {
+      display: none;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -25,7 +52,7 @@
 <div class="row">
   <!-- Column 1: Due Today -->
   <div class="col-3">
-    <h3>Due Today</h3>
+    <h3 class="section-title">Due Today</h3>
     {% for chore in due_today %}
     <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
       <div class="card-body">
@@ -44,7 +71,7 @@
   
   <!-- Column 2: Next 3 Days -->
   <div class="col-3">
-    <h3>Next 3 Days</h3>
+    <h3 class="section-title">Next 3 Days</h3>
     {% for chore in due_next_3 %}
     <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
       <div class="card-body">
@@ -63,7 +90,7 @@
   
   <!-- Column 3: Next Week -->
   <div class="col-3">
-    <h3>Next Week</h3>
+    <h3 class="section-title">Next Week</h3>
     {% for chore in due_next_week %}
     <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
       <div class="card-body">
@@ -82,7 +109,7 @@
   
   <!-- Column 4: Other Tasks -->
   <div class="col-3">
-    <h3>Other Tasks</h3>
+    <h3 class="section-title">Other Tasks</h3>
     {% for chore in other_tasks %}
     <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
       <div class="card-body">
@@ -106,18 +133,27 @@
     <form action="/complete_chore" method="post">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="assignModalLabel">Complete Chore</h5>
+          <h5 class="modal-title" id="assignModalLabel">Complete: </h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
           <input type="hidden" name="chore_id" id="chore_id">
-          <div class="mb-3">
-            <label for="userSelect" class="form-label">Select User</label>
-            <select class="form-select" id="userSelect" name="user_id">
+          <input type="hidden" name="user_id" id="user_id">
+          <div class="container">
+            <div class="row">
               {% for user in users %}
-              <option value="{{ user.id }}">{{ user.username }}</option>
+              <div class="col-4 mb-3 text-center">
+                <button type="button" class="btn user-select-btn" data-user-id="{{ user.id }}">
+                  {% if user.avatar %}
+                    <img src="{{ url_for('static', filename='avatars/' ~ user.avatar) }}" alt="{{ user.username }}" class="img-fluid rounded-circle mb-1" style="max-width: 80px;">
+                  {% else %}
+                    <img src="{{ url_for('static', filename='avatars/default_avatar.png') }}" alt="{{ user.username }}" class="img-fluid rounded-circle mb-1" style="max-width: 80px;">
+                  {% endif %}
+                  <br>{{ user.username }}
+                </button>
+              </div>
               {% endfor %}
-            </select>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -132,15 +168,31 @@
 
 {% block extra_js %}
 <script>
-document.querySelectorAll('.card-clickable').forEach(card => {
-  card.addEventListener('click', function() {
-    const choreId = this.getAttribute('data-id');
-    const choreName = this.getAttribute('data-name');
-    document.getElementById('assignModalLabel').textContent = 'Complete: ' + choreName;
-    document.getElementById('chore_id').value = choreId;
-    const modal = new bootstrap.Modal(document.getElementById('assignModal'));
-    modal.show();
+  // Open modal on card click
+  document.querySelectorAll('.card-clickable').forEach(card => {
+    card.addEventListener('click', function() {
+      const choreId = this.getAttribute('data-id');
+      const choreName = this.getAttribute('data-name');
+      document.getElementById('assignModalLabel').textContent = 'Complete: ' + choreName;
+      document.getElementById('chore_id').value = choreId;
+      // Clear any previous selection
+      document.getElementById('user_id').value = "";
+      document.querySelectorAll('.user-select-btn').forEach(btn => btn.classList.remove('selected'));
+      const modal = new bootstrap.Modal(document.getElementById('assignModal'));
+      modal.show();
+    });
   });
-});
+
+  // Handle user selection via avatar buttons
+  document.querySelectorAll('.user-select-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const userId = this.getAttribute('data-user-id');
+      document.getElementById('user_id').value = userId;
+      // Highlight the selected button
+      document.querySelectorAll('.user-select-btn').forEach(b => b.classList.remove('selected'));
+      this.classList.add('selected');
+      // Do not close the modal; wait for the user to click confirm.
+    });
+  });
 </script>
 {% endblock %}

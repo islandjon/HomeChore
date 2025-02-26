@@ -1,22 +1,25 @@
+from models import db, Household, User, Chore, Notification
 from flask import Flask, render_template, request, redirect, url_for, session
-from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import pytz
 import os
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://postgres:postgres@0.0.0.0:5432/choredb')
-app.secret_key = os.environ.get('SECRET_KEY', 'default-secret-key')  # Needed for sessions
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    'DATABASE_URL', 'postgresql://postgres:postgres@0.0.0.0:5432/choredb')
+app.secret_key = os.environ.get(
+    'SECRET_KEY', 'default-secret-key')  # Needed for sessions
 
 # Import the models from models.py
-from models import db, Household, User, Chore, Notification
 
 # Initialize the database with the app
 db.init_app(app)
 
 # Initialize the migration engine
 migrate = Migrate(app, db)
+
 
 @app.route('/')
 def dashboard():
@@ -66,11 +69,11 @@ def dashboard():
             'description': chore.description,
             'last_completed': last_completed_str,
             'last_completed_by': last_completed_by,
-            'due_date': "Today" if due_date_date == today_date else due_date_date.strftime("%Y-%m-%d")
+            'due_date': "Today" if due_date_date <= today_date else due_date_date.strftime("%Y-%m-%d")
         }
 
         # Categorize based on the due_date.
-        if due_date_date == today_date:
+        if due_date_date <= today_date:
             due_today.append(chore_dict)
         elif today_date < due_date_date <= today_date + timedelta(days=3):
             due_next_3.append(chore_dict)
@@ -85,6 +88,7 @@ def dashboard():
                            due_next_week=due_next_week,
                            other_tasks=other_tasks,
                            timezone=tz_name)
+
 
 
 @app.route('/settings', methods=['GET', 'POST'])
@@ -102,6 +106,7 @@ def settings():
     current_tz = session.get('timezone', 'UTC')
     return render_template('settings.html', timezones=common_timezones, current_tz=current_tz)
 
+
 @app.route('/complete_chore', methods=['POST'])
 def complete_chore():
     chore_id = request.form.get('chore_id')
@@ -116,6 +121,7 @@ def complete_chore():
         db.session.add(notif)
         db.session.commit()
     return redirect(url_for('dashboard'))
+
 
 @app.route('/add_chore', methods=['GET', 'POST'])
 def add_chore():
@@ -143,25 +149,13 @@ def add_chore():
         households = Household.query.all()
         return render_template('add_chore.html', households=households)
 
-@app.route('/add_user', methods=['GET', 'POST'])
-def add_user():
-    if request.method == 'POST':
-        household_id = request.form.get('household_id')
-        username = request.form.get('username')
-        email = request.form.get('email')
-        new_user = User(household_id=household_id, username=username, email=email)
-        db.session.add(new_user)
-        db.session.commit()
-        return redirect(url_for('dashboard'))
-    else:
-        households = Household.query.all()
-        return render_template('add_user.html', households=households)
 
 @app.route('/manage_chores')
 def manage_chores():
     # List all chores in a table
     chores = Chore.query.all()
     return render_template('manage_chores.html', chores=chores)
+
 
 @app.route('/edit_chore/<int:chore_id>', methods=['GET', 'POST'])
 def edit_chore(chore_id):
@@ -178,6 +172,7 @@ def edit_chore(chore_id):
         return redirect(url_for('manage_chores'))
     return render_template('edit_chore.html', chore=chore)
 
+
 @app.route('/delete_chore/<int:chore_id>', methods=['POST'])
 def delete_chore(chore_id):
     chore = Chore.query.get_or_404(chore_id)
@@ -185,10 +180,40 @@ def delete_chore(chore_id):
     db.session.commit()
     return redirect(url_for('manage_chores'))
 
+
 @app.route('/manage_users')
 def manage_users():
     users = User.query.all()
     return render_template('manage_users.html', users=users)
+
+
+@app.route('/add_user', methods=['GET', 'POST'])
+def add_user():
+    if request.method == 'POST':
+        household_id = request.form.get('household_id')
+        username = request.form.get('username')
+        email = request.form.get('email')
+        # Handle avatar file upload
+        avatar_file = request.files.get('avatar')
+        avatar_filename = None
+        if avatar_file and avatar_file.filename:
+            avatar_filename = secure_filename(avatar_file.filename)
+            avatar_path = os.path.join(
+                app.static_folder, 'avatars', avatar_filename)
+            # Ensure the directory exists
+            os.makedirs(os.path.dirname(avatar_path), exist_ok=True)
+            avatar_file.save(avatar_path)
+        new_user = User(household_id=household_id,
+                        username=username,
+                        email=email,
+                        avatar=avatar_filename)  # Assuming your User model has an "avatar" column.
+        db.session.add(new_user)
+        db.session.commit()
+        return redirect(url_for('dashboard'))
+    else:
+        households = Household.query.all()
+        return render_template('add_user.html', households=households)
+
 
 @app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
 def edit_user(user_id):
@@ -197,10 +222,20 @@ def edit_user(user_id):
         user.username = request.form.get('username')
         user.email = request.form.get('email')
         user.household_id = request.form.get('household_id')
+        # Check if a new avatar file was uploaded
+        avatar_file = request.files.get('avatar')
+        if avatar_file and avatar_file.filename:
+            avatar_filename = secure_filename(avatar_file.filename)
+            avatar_path = os.path.join(
+                app.static_folder, 'avatars', avatar_filename)
+            os.makedirs(os.path.dirname(avatar_path), exist_ok=True)
+            avatar_file.save(avatar_path)
+            user.avatar = avatar_filename
         db.session.commit()
         return redirect(url_for('manage_users'))
     households = Household.query.all()
     return render_template('edit_user.html', user=user, households=households)
+
 
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
 def delete_user(user_id):
@@ -210,6 +245,8 @@ def delete_user(user_id):
     return redirect(url_for('manage_users'))
 
 # Initial setup CLI command
+
+
 @app.cli.command("setup")
 def setup():
     """
@@ -227,7 +264,8 @@ def setup():
     db.session.commit()
 
     # Create default user
-    user = User(household_id=household.id, username="admin", email="admin@example.com")
+    user = User(household_id=household.id,
+                username="admin", email="admin@example.com")
     db.session.add(user)
     db.session.commit()
 
@@ -250,6 +288,7 @@ def setup():
     db.session.commit()
 
     print("Initial setup completed: Default household, user, and chores created.")
+
 
 if __name__ == '__main__':
     app.run(debug=True)
