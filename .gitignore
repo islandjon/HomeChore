@@ -68,3 +68,4 @@ docker-compose.override.yml
 
 src/static/avatars/*
 !src/static/avatars/default_avatar.png
+.homechore/

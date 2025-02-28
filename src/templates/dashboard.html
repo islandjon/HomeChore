@@ -2,20 +2,68 @@
 
 {% block extra_head %}
 <style>
-  /* Fade in animation for cards */
+  /* Smooth animations */
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+
   .card {
     animation: fadeIn 0.3s ease;
     transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border-radius: 10px;
+    padding: 10px;
+    color: white;
+    margin-bottom: 10px;
+    cursor: pointer;
   }
+
   .card:hover {
     transform: scale(1.02);
     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
   }
-  /* Optional: style the user selection buttons */
+
+  .dimmed {
+    opacity: 0.6;
+  }
+
+  /* User container layout */
+  .user-container {
+    display: flex;
+    flex-wrap: nowrap;  /* Keep users in one row */
+    width: 100%;
+  }
+
+  /* User column with dimmed background */
+  .user-column {
+    flex: 1; /* Makes columns evenly distribute across screen */
+    padding: 15px;
+    border-radius: 10px;
+    min-height: 300px;
+    overflow: hidden;
+    background-color: rgba(255, 255, 255, 0.1); /* Default dimmed background */
+    margin: 5px;
+  }
+
+  /* Adjust user column background dynamically */
+  .user-column[data-color] {
+    background-color: var(--dim-color);
+  }
+
+  /* User chore cards (full user color) */
+  .user-card {
+    background-color: rgba(255, 255, 255, 0.3);
+  }
+
+  /* Avatar styling */
+  .avatar-img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    margin-bottom: 10px;
+  }
+
+  /* Modal user selection buttons */
   .user-select-btn {
     border: none;
     background: none;
@@ -27,19 +75,14 @@
     border: 2px solid #0d6efd;
     background-color: rgba(13,110,253,0.1);
   }
+
+  /* Responsive adjustments */
   @media (max-width: 768px) {
-    .col-3 {
-      flex: 0 0 100%;
-      max-width: 100%;
+    .user-container {
+      flex-wrap: wrap; /* Stack users on smaller screens */
     }
-    .card {
-      margin-bottom: 1rem;
-    }
-    .row {
-      flex-direction: column;
-    }
-    .section-title {
-      display: none;
+    .user-column {
+      flex: 1 1 100%; /* Make each column full width on small screens */
     }
   }
 </style>
@@ -48,83 +91,44 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<h1 class="mt-4">Household Chores</h1>
-<div class="row">
-  <!-- Column 1: Due Today -->
-  <div class="col-3">
-    <h3 class="section-title">Due Today</h3>
-    {% for chore in due_today %}
-    <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
-      <div class="card-body">
-        <h5 class="card-title">{{ chore.name }}</h5>
-        <p class="card-text">{{ chore.description }}</p>
-        <p class="card-text">
-          <small class="text-muted">
-            Last Completed: {{ chore.last_completed }}<br>
-            Completed By: {{ chore.last_completed_by }}
-          </small>
-        </p>
-      </div>
+
+<div class="user-container">
+  {% for user_id, data in user_chores.items() %}
+  <div class="user-column" 
+       style="--full-color: {{ data.user.color }}; --dim-color: {{ data.user.color | replace(')', ', 0.2)') | replace('rgb', 'rgba') }};"
+       data-color="{{ data.user.color }}">
+    <div class="text-center">
+      <img src="{{ url_for('static', filename='avatars/' ~ data.user.avatar) }}" 
+           alt="{{ data.user.username }}" class="avatar-img">
+      <h4 class="text-white">{{ data.user.username }}</h4>
+    </div>
+    <hr class="text-white">
+
+    <!-- Due Today -->
+    {% for chore in data.due_today %}
+    <div class="card user-card" data-id="{{ chore.id }}" data-user="{{ data.user.id }}" data-name="{{ chore.name }}">
+      <h5>{{ chore.name }}</h5>
+      <p>{{ chore.description }}</p>
+      <small>
+        Last Completed: {{ chore.last_completed | localtime }} by {{ chore.last_completed_by or "N/A" }}
+      </small>
+      
+    </div>
+    {% endfor %}
+
+    <!-- Other Tasks (Dimmed) -->
+    {% for chore in data.other_tasks %}
+    <div class="card user-card dimmed" data-id="{{ chore.id }}" data-user="{{ data.user.id }}" data-name="{{ chore.name }}">
+      <h5>{{ chore.name }}</h5>
+      <p>{{ chore.description }}</p>
+      <small>
+        Last Completed: {{ chore.last_completed | localtime }} by {{ chore.last_completed_by or "N/A" }}
+      </small>
+      
     </div>
     {% endfor %}
   </div>
-  
-  <!-- Column 2: Next 3 Days -->
-  <div class="col-3">
-    <h3 class="section-title">Next 3 Days</h3>
-    {% for chore in due_next_3 %}
-    <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
-      <div class="card-body">
-        <h5 class="card-title">{{ chore.name }}</h5>
-        <p class="card-text">{{ chore.description }}</p>
-        <p class="card-text">
-          <small class="text-muted">
-            Last Completed: {{ chore.last_completed }}<br>
-            Completed By: {{ chore.last_completed_by }}
-          </small>
-        </p>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  
-  <!-- Column 3: Next Week -->
-  <div class="col-3">
-    <h3 class="section-title">Next Week</h3>
-    {% for chore in due_next_week %}
-    <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
-      <div class="card-body">
-        <h5 class="card-title">{{ chore.name }}</h5>
-        <p class="card-text">{{ chore.description }}</p>
-        <p class="card-text">
-          <small class="text-muted">
-            Last Completed: {{ chore.last_completed }}<br>
-            Completed By: {{ chore.last_completed_by }}
-          </small>
-        </p>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  
-  <!-- Column 4: Other Tasks -->
-  <div class="col-3">
-    <h3 class="section-title">Other Tasks</h3>
-    {% for chore in other_tasks %}
-    <div class="card mb-3 card-clickable" data-id="{{ chore.id }}" data-name="{{ chore.name }}" style="cursor: pointer;">
-      <div class="card-body">
-        <h5 class="card-title">{{ chore.name }}</h5>
-        <p class="card-text">{{ chore.description }}</p>
-        <p class="card-text">
-          <small class="text-muted">
-            Last Completed: {{ chore.last_completed }}<br>
-            Completed By: {{ chore.last_completed_by }}
-          </small>
-        </p>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
+  {% endfor %}
 </div>
 
 <!-- Modal for marking a chore as complete -->
@@ -133,7 +137,7 @@
     <form action="/complete_chore" method="post">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="assignModalLabel">Complete: </h5>
+          <h5 class="modal-title" id="assignModalLabel">Complete Chore</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
@@ -141,15 +145,13 @@
           <input type="hidden" name="user_id" id="user_id">
           <div class="container">
             <div class="row">
-              {% for user in users %}
+              {% for user_id, data in user_chores.items() %}
               <div class="col-4 mb-3 text-center">
-                <button type="button" class="btn user-select-btn" data-user-id="{{ user.id }}">
-                  {% if user.avatar %}
-                    <img src="{{ url_for('static', filename='avatars/' ~ user.avatar) }}" alt="{{ user.username }}" class="img-fluid rounded-circle mb-1" style="max-width: 80px;">
-                  {% else %}
-                    <img src="{{ url_for('static', filename='avatars/default_avatar.png') }}" alt="{{ user.username }}" class="img-fluid rounded-circle mb-1" style="max-width: 80px;">
-                  {% endif %}
-                  <br>{{ user.username }}
+                <button type="button" class="btn user-select-btn" data-user-id="{{ data.user.id }}">
+                  <img src="{{ url_for('static', filename='avatars/' ~ data.user.avatar) }}" 
+                       alt="{{ data.user.username }}" class="img-fluid rounded-circle mb-1" 
+                       style="max-width: 80px;">
+                  <br>{{ data.user.username }}
                 </button>
               </div>
               {% endfor %}
@@ -168,30 +170,37 @@
 
 {% block extra_js %}
 <script>
-  // Open modal on card click
-  document.querySelectorAll('.card-clickable').forEach(card => {
-    card.addEventListener('click', function() {
-      const choreId = this.getAttribute('data-id');
-      const choreName = this.getAttribute('data-name');
-      document.getElementById('assignModalLabel').textContent = 'Complete: ' + choreName;
-      document.getElementById('chore_id').value = choreId;
-      // Clear any previous selection
-      document.getElementById('user_id').value = "";
-      document.querySelectorAll('.user-select-btn').forEach(btn => btn.classList.remove('selected'));
-      const modal = new bootstrap.Modal(document.getElementById('assignModal'));
-      modal.show();
-    });
-  });
+  document.addEventListener("DOMContentLoaded", function () {
+    // Open modal on card click and preselect the assigned user
+    document.querySelectorAll(".user-column .card").forEach(card => {
+      card.addEventListener("click", function () {
+        const choreId = this.getAttribute("data-id");
+        const assignedUserId = this.getAttribute("data-user");
+        document.getElementById("assignModalLabel").textContent = "Complete: " + this.getAttribute("data-name");
+        document.getElementById("chore_id").value = choreId;
+        document.getElementById("user_id").value = assignedUserId;
 
-  // Handle user selection via avatar buttons
-  document.querySelectorAll('.user-select-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const userId = this.getAttribute('data-user-id');
-      document.getElementById('user_id').value = userId;
-      // Highlight the selected button
-      document.querySelectorAll('.user-select-btn').forEach(b => b.classList.remove('selected'));
-      this.classList.add('selected');
-      // Do not close the modal; wait for the user to click confirm.
+        // Clear previous selections and preselect assigned user
+        document.querySelectorAll(".user-select-btn").forEach(btn => btn.classList.remove("selected"));
+        const assignedButton = document.querySelector(`.user-select-btn[data-user-id="${assignedUserId}"]`);
+        if (assignedButton) {
+          assignedButton.classList.add("selected");
+        }
+
+        const modal = new bootstrap.Modal(document.getElementById("assignModal"));
+        modal.show();
+      });
+    });
+
+    // Handle user selection via avatar buttons in modal
+    document.querySelectorAll(".user-select-btn").forEach(btn => {
+      btn.addEventListener("click", function () {
+        const userId = this.getAttribute("data-user-id");
+        document.getElementById("user_id").value = userId;
+        // Highlight the selected button
+        document.querySelectorAll(".user-select-btn").forEach(b => b.classList.remove("selected"));
+        this.classList.add("selected");
+      });
     });
   });
 </script>

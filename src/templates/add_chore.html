@@ -3,33 +3,72 @@
 {% block title %}Add Chore{% endblock %}
 
 {% block content %}
-  <div class="mt-4">
-    <h1>Add a New Chore</h1>
-    <form action="{{ url_for('add_chore') }}" method="post">
-      <div class="form-group">
-        <label for="householdSelect">Household</label>
-        <select class="form-control" id="householdSelect" name="household_id">
-          {% for household in households %}
-          <option value="{{ household.id }}">{{ household.name }}</option>
-          {% endfor %}
-        </select>
+<div class="mt-4">
+  <h1>Add a New Chore</h1>
+  <form action="{{ url_for('add_chore') }}" method="post">
+    <div class="mb-3">
+      <label for="householdSelect" class="form-label">Household</label>
+      <select class="form-select" id="householdSelect" name="household_id">
+        {% for household in households %}
+        <option value="{{ household.id }}">{{ household.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label for="nameInput" class="form-label">Chore Name</label>
+      <input type="text" class="form-control" id="nameInput" name="name" required>
+    </div>
+    <div class="mb-3">
+      <label for="descriptionInput" class="form-label">Description</label>
+      <textarea class="form-control" id="descriptionInput" name="description" rows="3"></textarea>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Due Days</label><br>
+      <div class="form-check form-check-inline">
+        <input type="checkbox" class="form-check-input" name="due_days" id="dayMon" value="Mon">
+        <label class="form-check-label" for="dayMon">Mon</label>
       </div>
-      <div class="form-group">
-        <label for="nameInput">Chore Name</label>
-        <input type="text" class="form-control" id="nameInput" name="name" required>
+      <div class="form-check form-check-inline">
+        <input type="checkbox" class="form-check-input" name="due_days" id="dayTue" value="Tue">
+        <label class="form-check-label" for="dayTue">Tue</label>
       </div>
-      <div class="form-group">
-        <label for="descriptionInput">Description</label>
-        <textarea class="form-control" id="descriptionInput" name="description" rows="3"></textarea>
+      <div class="form-check form-check-inline">
+        <input type="checkbox" class="form-check-input" name="due_days" id="dayWed" value="Wed">
+        <label class="form-check-label" for="dayWed">Wed</label>
       </div>
-      <div class="form-group">
-        <label for="frequencyInput">Frequency (in days)</label>
-        <input type="number" class="form-control" id="frequencyInput" name="frequency" required>
-        <small class="form-text text-muted">
-          Enter the frequency (in days) after which the chore should be repeated.
-        </small>
+      <div class="form-check form-check-inline">
+        <input type="checkbox" class="form-check-input" name="due_days" id="dayThu" value="Thu">
+        <label class="form-check-label" for="dayThu">Thu</label>
       </div>
-      <button type="submit" class="btn btn-primary">Add Chore</button>
-    </form>
-  </div>
+      <div class="form-check form-check-inline">
+        <input type="checkbox" class="form-check-input" name="due_days" id="dayFri" value="Fri">
+        <label class="form-check-label" for="dayFri">Fri</label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input type="checkbox" class="form-check-input" name="due_days" id="daySat" value="Sat">
+        <label class="form-check-label" for="daySat">Sat</label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input type="checkbox" class="form-check-input" name="due_days" id="daySun" value="Sun">
+        <label class="form-check-label" for="daySun">Sun</label>
+      </div>
+    </div>
+    <div class="mb-3">
+      <label for="cooldownInput" class="form-label">Cooldown (in days)</label>
+      <input type="number" class="form-control" id="cooldownInput" name="cooldown" value="1" min="0" required>
+    </div>
+    <!-- Assign users -->
+    <div class="mb-3">
+      <label class="form-label">Assign to Users</label>
+      <div class="form-check">
+        {% for user in users %}
+        <input class="form-check-input" type="checkbox" name="users" value="{{ user.id }}" id="user{{ user.id }}">
+        <label class="form-check-label" for="user{{ user.id }}">{{ user.username }}</label><br>
+        {% endfor %}
+      </div>
+    </div>  
+    
+    <button type="submit" class="btn btn-primary">Add Chore</button>
+  </form>
+</div>
 {% endblock %}

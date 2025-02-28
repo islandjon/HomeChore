@@ -1,9 +1,4 @@
-{% extends "base.html" %}
-
-{% block title %}Edit Chore{% endblock %}
-
 {% block content %}
-<h1 class="mt-4">Edit Chore</h1>
 <form action="{{ url_for('edit_chore', chore_id=chore.id) }}" method="post">
   <div class="mb-3">
     <label for="nameInput" class="form-label">Chore Name</label>
@@ -43,56 +38,33 @@
     <div class="form-check form-check-inline">
       <input type="checkbox" class="form-check-input" name="due_days" id="daySun" value="Sun" {% if 'Sun' in selected_days %}checked{% endif %}>
       <label class="form-check-label" for="daySun">Sun</label>
-      <div class="mt-2">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="selectWeekdays()">Weekdays</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="selectWeekends()">Weekends</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="clearSelection()">Clear</button>
-      </div>
     </div>
-  
-    <div class="mb-3">
-      <label for="cooldownInput" class="form-label">Cooldown (in days)</label>
-      <input type="number" class="form-control" id="cooldownInput" name="cooldown" value="{{ chore.cooldown or 1 }}" min="0" required>
-    </div>
-    <!-- Assign users -->
-    <div class="mb-3">
-      <label class="form-label">Assign to Users</label>
-      <div class="form-check">
-        {% set assigned_ids = chore.assignees | map(attribute='id') | list %}
-        {% for user in users %}
-        <input class="form-check-input" type="checkbox" name="assignees" value="{{ user.id }}" id="user{{ user.id }}" 
-               {% if user.id in assigned_ids %}checked{% endif %}>
-        <label class="form-check-label" for="user{{ user.id }}">{{ user.username }}</label><br>
-        {% endfor %}
-      </div>
+    <div class="mt-2">
+      <button type="button" class="btn btn-primary btn-sm" onclick="selectWeekdays()">Weekdays</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="selectWeekends()">Weekends</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="clearSelection()">Clear</button>
     </div>
   </div>
-  
+
+  <div class="mb-3">
+    <label for="cooldownInput" class="form-label">Cooldown (in days)</label>
+    <input type="number" class="form-control" id="cooldownInput" name="cooldown" value="{{ chore.cooldown or 1 }}" min="0" required>
+  </div>
+  <!-- Assign users -->
+  <div class="mb-3">
+    <label class="form-label">Assign to Users</label>
+    <div class="form-check">
+      {% set assigned_ids = chore.assignees | map(attribute='id') | list %}
+      {% for user in users %}
+      <input class="form-check-input" type="checkbox" name="assignees" value="{{ user.id }}" id="user{{ user.id }}" 
+             {% if user.id in assigned_ids %}checked{% endif %}>
+      <label class="form-check-label" for="user{{ user.id }}">{{ user.username }}</label><br>
+      {% endfor %}
+    </div>
+  </div>
+
   <button type="submit" class="btn btn-primary">Save Changes</button>
   <a href="{{ url_for('manage_chores') }}" class="btn btn-secondary">Cancel</a>
 </form>
-{% endblock %}
-
-
-{% block extra_js %}
-<script>
-  function clearSelection() {
-    document.querySelectorAll('input[name="due_days"]').forEach(el => el.checked = false);
-  }
-
-  function selectWeekdays() {
-    clearSelection();
-    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].forEach(day => {
-      document.getElementById('day' + day).checked = true;
-    });
-  }
-
-  function selectWeekends() {
-    clearSelection();
-    ['Sat', 'Sun'].forEach(day => {
-      document.getElementById('day' + day).checked = true;
-    });
-  }
-</script>
 
 {% endblock %}

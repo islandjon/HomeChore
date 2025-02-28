@@ -1,10 +1,11 @@
-from models import db, Household, User, Chore, Notification
+from models import db, Household, User, Chore, Notification, ChoreCompletion
 from flask import Flask, render_template, request, redirect, url_for, session
 from flask_migrate import Migrate
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import pytz
 import os
+import calendar
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
@@ -20,74 +21,93 @@ db.init_app(app)
 # Initialize the migration engine
 migrate = Migrate(app, db)
 
+@app.template_filter('localtime')
+def localtime_filter(dt):
+    if not dt:
+        return "Never"
+    # Get the user's timezone from the session (default to UTC)
+    tz_name = session.get('timezone', 'UTC')
+    timezone = pytz.timezone(tz_name)
+    # Convert dt (assumed to be UTC) to the selected timezone
+    local_dt = dt.replace(tzinfo=pytz.utc).astimezone(timezone)
+    # Return a formatted string in Day Month format
+    return local_dt.strftime("%a %b %d, %I:%M %p")
+
+def calculate_next_due_date(last_date, due_days):
+    """
+    Given last_date (a date object) and due_days (a comma-separated string like "Mon,Wed,Fri"),
+    returns the next date (after last_date) whose weekday is in due_days.
+    """
+    due_day_list = [day.strip() for day in due_days.split(',')]
+    # Mapping of weekday abbreviations to numbers (Monday=0, Sunday=6)
+    weekday_map = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
+    due_weekdays = [weekday_map[day] for day in due_day_list if day in weekday_map]
+
+    for days_ahead in range(1, 8):  # Check the next 7 days
+        next_date = last_date + timedelta(days=days_ahead)
+        if next_date.weekday() in due_weekdays:
+            return next_date
+    return last_date  # fallback
+
 
 @app.route('/')
 def dashboard():
-    # Get the user's timezone (default to UTC)
     tz_name = session.get('timezone', 'UTC')
     timezone = pytz.timezone(tz_name)
     now = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(timezone)
     today_date = now.date()
+    today_day = now.strftime("%a")  # e.g. "Mon", "Tue", etc.
 
-    chores = Chore.query.all()
-    users = User.query.all()
+    users = User.query.order_by(User.birthdate.asc()).all()
+    user_chores = {}
 
-    due_today = []
-    due_next_3 = []
-    due_next_week = []
-    other_tasks = []
+    for user in users:
+        # Get chores assigned to this user and sort them alphabetically.
+        assigned_chores = sorted(user.assigned_chores, key=lambda c: c.name.lower())
+        due_today = []
+        other_tasks = []
 
-    for chore in chores:
-        # Only process chores with a defined frequency
-        if not chore.frequency:
-            continue
+        for chore in assigned_chores:
+            
+            if chore.assigned_to:
+                user_obj = User.query.get(chore.assigned_to)
+                chore.last_completed_by = user_obj.username if user_obj else "Unknown"
+            else:
+                chore.last_completed_by = "N/A"
+            
+            # Determine the next available date based on the cooldown.
+            if chore.last_completed:
+                last_completed_date = chore.last_completed.date()
+                cooldown_days = chore.cooldown if chore.cooldown is not None else 1
+                next_available_date = last_completed_date + timedelta(days=cooldown_days)
+            else:
+                # If never completed, it's available immediately.
+                next_available_date = today_date
 
-        # If there is no last_completed value, treat this chore as due today.
-        if not chore.last_completed:
-            due_date_date = today_date
-            last_completed_str = "Never"
-        else:
-            last_completed_local = chore.last_completed.replace(tzinfo=pytz.utc).astimezone(timezone)
-            # If the chore was completed today, skip it (already done).
-            if last_completed_local.date() == today_date:
+            # If today is before the next available date, skip this chore.
+            if today_date < next_available_date:
                 continue
-            due_date = last_completed_local + chore.frequency
-            last_completed_str = last_completed_local.strftime("%Y-%m-%d %H:%M:%S %Z")
-            due_date_date = due_date.date()
 
-        # Determine who completed it last.
-        if chore.assigned_to:
-            user_obj = User.query.get(chore.assigned_to)
-            last_completed_by = user_obj.username if user_obj else "Unknown"
-        else:
-            last_completed_by = "N/A"
+            # Categorize the chore based on its due_days setting.
+            if chore.due_days:
+                # Split due_days into a list, trimming whitespace.
+                due_day_list = [d.strip() for d in chore.due_days.split(',')]
+                if today_day in due_day_list:
+                    due_today.append(chore)
+                else:
+                    other_tasks.append(chore)
+            else:
+                # If no due_days are set, default to due today.
+                due_today.append(chore)
+            
 
-        # Prepare the chore dictionary.
-        chore_dict = {
-            'id': chore.id,
-            'name': chore.name,
-            'description': chore.description,
-            'last_completed': last_completed_str,
-            'last_completed_by': last_completed_by,
-            'due_date': "Today" if due_date_date <= today_date else due_date_date.strftime("%Y-%m-%d")
+        user_chores[user.id] = {
+            'user': user,
+            'due_today': due_today,
+            'other_tasks': other_tasks
         }
 
-        # Categorize based on the due_date.
-        if due_date_date <= today_date:
-            due_today.append(chore_dict)
-        elif today_date < due_date_date <= today_date + timedelta(days=3):
-            due_next_3.append(chore_dict)
-        elif today_date + timedelta(days=3) < due_date_date <= today_date + timedelta(days=7):
-            due_next_week.append(chore_dict)
-        else:
-            other_tasks.append(chore_dict)
-
-    return render_template('dashboard.html', users=users,
-                           due_today=due_today,
-                           due_next_3=due_next_3,
-                           due_next_week=due_next_week,
-                           other_tasks=other_tasks,
-                           timezone=tz_name)
+    return render_template('dashboard.html', user_chores=user_chores, timezone=tz_name)
 
 
 
@@ -107,39 +127,26 @@ def settings():
     return render_template('settings.html', timezones=common_timezones, current_tz=current_tz)
 
 
-@app.route('/complete_chore', methods=['POST'])
-def complete_chore():
-    chore_id = request.form.get('chore_id')
-    user_id = request.form.get('user_id')
-    chore = Chore.query.get(chore_id)
-    if chore:
-        chore.last_completed = datetime.utcnow()
-        chore.assigned_to = user_id
-        db.session.commit()
-        notif = Notification(user_id=user_id, chore_id=chore.id,
-                             message=f"You completed '{chore.name}' on {chore.last_completed.strftime('%Y-%m-%d %H:%M:%S')}")
-        db.session.add(notif)
-        db.session.commit()
-    return redirect(url_for('dashboard'))
-
-
 @app.route('/add_chore', methods=['GET', 'POST'])
 def add_chore():
     if request.method == 'POST':
         household_id = request.form.get('household_id')
         name = request.form.get('name')
         description = request.form.get('description')
-        frequency_input = request.form.get('frequency')
+        due_days = request.form.getlist('due_days')
+        due_days_str = ",".join([day.strip() for day in due_days]) if due_days else None
+        cooldown_input = request.form.get('cooldown')
         try:
-            # Convert the provided frequency (in days) to a timedelta object.
-            frequency_interval = timedelta(days=int(frequency_input))
+            cooldown_val = int(cooldown_input)
         except Exception:
-            frequency_interval = None
+            cooldown_val = 1  # default to 1 day if conversion fails
+
         new_chore = Chore(
             household_id=household_id,
             name=name,
             description=description,
-            frequency=frequency_interval,
+            due_days=due_days_str,
+            cooldown=cooldown_val,
             last_completed=None
         )
         db.session.add(new_chore)
@@ -150,27 +157,97 @@ def add_chore():
         return render_template('add_chore.html', households=households)
 
 
+def get_next_assignee(chore):
+    """
+    Given a chore, determine the next assignee among its assignees:
+    Return the user who has never completed the chore or who did it longest ago.
+    """
+    # Get the list of users assigned to this chore
+    assignees = chore.assignees
+    next_assignee = None
+    oldest_completion = None
+    
+    for user in assignees:
+        # Get the most recent completion for this chore by this user
+        completion = (ChoreCompletion.query
+                      .filter_by(chore_id=chore.id, user_id=user.id)
+                      .order_by(ChoreCompletion.completed_at.desc())
+                      .first())
+        if completion is None:
+            # If the user has never completed the chore, return immediately.
+            return user
+        else:
+            if oldest_completion is None or completion.completed_at < oldest_completion:
+                oldest_completion = completion.completed_at
+                next_assignee = user
+    return next_assignee
+
+@app.route('/complete_chore', methods=['POST'])
+def complete_chore():
+    chore_id = request.form.get('chore_id')
+    user_id = request.form.get('user_id')  # Ensure this is captured
+    chore = Chore.query.get(chore_id)
+
+    if chore and user_id:
+        chore.last_completed = datetime.utcnow()
+        chore.assigned_to = int(user_id)  # Assign to the selected user
+        db.session.commit()
+
+        # Log completion in ChoreCompletion table
+        completion = ChoreCompletion(chore_id=chore.id, user_id=int(user_id))
+        db.session.add(completion)
+        db.session.commit()
+
+        # Add a notification
+        notification = Notification(
+            user_id=int(user_id),
+            chore_id=chore.id,
+            message=f"You completed '{chore.name}' on {chore.last_completed.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        db.session.add(notification)
+        db.session.commit()
+
+    return redirect(url_for('dashboard'))
+
+
+
 @app.route('/manage_chores')
 def manage_chores():
     # List all chores in a table
     chores = Chore.query.all()
+    # Sort chores by household and then by name
+    chores = sorted(chores, key=lambda c: (c.household_id, c.name))
     return render_template('manage_chores.html', chores=chores)
 
 
 @app.route('/edit_chore/<int:chore_id>', methods=['GET', 'POST'])
 def edit_chore(chore_id):
     chore = Chore.query.get_or_404(chore_id)
+    users = User.query.all()  # Fetch all users for the multi-select list.
+    # Sort users by birthdate and then by username
+    users = sorted(users, key=lambda u: (u.birthdate, u.username))
     if request.method == 'POST':
+        # Your existing update logic
         chore.name = request.form.get('name')
         chore.description = request.form.get('description')
-        frequency_input = request.form.get('frequency')
+        due_days = request.form.getlist('due_days')
+        chore.due_days = ",".join([day.strip() for day in due_days]) if due_days else None
+        # Process allowed assignees from multi-select
+        selected_assignee_ids = request.form.getlist('assignees')
+        # Update many-to-many relationship: assign allowed users.
+        chore.assignees = User.query.filter(User.id.in_(selected_assignee_ids)).all()
+        cooldown_input = request.form.get('cooldown')
         try:
-            chore.frequency = timedelta(days=int(frequency_input))
+            chore.cooldown = int(cooldown_input)
         except Exception:
-            chore.frequency = None
+            chore.cooldown = 1
         db.session.commit()
         return redirect(url_for('manage_chores'))
-    return render_template('edit_chore.html', chore=chore)
+    if request.args.get('ajax'):
+        return render_template('edit_chore_form.html', chore=chore, users=users)
+    else:
+        return render_template('edit_chore.html', chore=chore, users=users)
+
 
 
 @app.route('/delete_chore/<int:chore_id>', methods=['POST'])
@@ -190,51 +267,72 @@ def manage_users():
 @app.route('/add_user', methods=['GET', 'POST'])
 def add_user():
     if request.method == 'POST':
-        household_id = request.form.get('household_id')
         username = request.form.get('username')
         email = request.form.get('email')
-        # Handle avatar file upload
+        birthdate = request.form.get('birthdate')
+        household_id = request.form.get('household_id')
+        color = request.form.get('color', '#3498db')  # Default blue
         avatar_file = request.files.get('avatar')
-        avatar_filename = None
+
+        # Convert birthdate string to date format
+        birthdate = datetime.strptime(birthdate, "%Y-%m-%d").date() if birthdate else None
+
+        # Handle avatar upload
         if avatar_file and avatar_file.filename:
-            avatar_filename = secure_filename(avatar_file.filename)
-            avatar_path = os.path.join(
-                app.static_folder, 'avatars', avatar_filename)
-            # Ensure the directory exists
-            os.makedirs(os.path.dirname(avatar_path), exist_ok=True)
+            filename = secure_filename(avatar_file.filename)
+            avatar_path = os.path.join(app.static_folder, 'avatars', filename)
             avatar_file.save(avatar_path)
-        new_user = User(household_id=household_id,
-                        username=username,
-                        email=email,
-                        avatar=avatar_filename)  # Assuming your User model has an "avatar" column.
+        else:
+            filename = "default_avatar.png"
+
+        new_user = User(username=username, email=email, birthdate=birthdate,
+                        household_id=household_id, color=color, avatar=filename)
         db.session.add(new_user)
         db.session.commit()
+
+        # Assign selected chores
+        selected_chores = request.form.getlist('chores')
+        new_user.assigned_chores = Chore.query.filter(Chore.id.in_(selected_chores)).all()
+        db.session.commit()
+
         return redirect(url_for('dashboard'))
-    else:
-        households = Household.query.all()
-        return render_template('add_user.html', households=households)
+
+    households = Household.query.all()
+    chores = Chore.query.all()
+    return render_template('add_user.html', households=households, chores=chores)
 
 
 @app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
+@app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
 def edit_user(user_id):
     user = User.query.get_or_404(user_id)
+
     if request.method == 'POST':
         user.username = request.form.get('username')
         user.email = request.form.get('email')
         user.household_id = request.form.get('household_id')
-        # Check if a new avatar file was uploaded
+        user.color = request.form.get('color', '#3498db')
+
+        birthdate = request.form.get('birthdate')
+        user.birthdate = datetime.strptime(birthdate, "%Y-%m-%d").date() if birthdate else None
+
         avatar_file = request.files.get('avatar')
         if avatar_file and avatar_file.filename:
-            avatar_filename = secure_filename(avatar_file.filename)
-            avatar_path = os.path.join(
-                app.static_folder, 'avatars', avatar_filename)
-            os.makedirs(os.path.dirname(avatar_path), exist_ok=True)
+            filename = secure_filename(avatar_file.filename)
+            avatar_path = os.path.join(app.static_folder, 'avatars', filename)
             avatar_file.save(avatar_path)
-            user.avatar = avatar_filename
+            user.avatar = filename  # Update avatar only if a new file is uploaded
+
+        # Update chore assignments
+        selected_chores = request.form.getlist('chores')
+        user.assigned_chores = Chore.query.filter(Chore.id.in_(selected_chores)).all()
+
         db.session.commit()
-        return redirect(url_for('manage_users'))
+        return redirect(url_for('dashboard'))
+
     households = Household.query.all()
-    return render_template('edit_user.html', user=user, households=households)
+    chores = Chore.query.all()
+    return render_template('edit_user.html', user=user, households=households, chores=chores)
 
 
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
@@ -291,4 +389,4 @@ def setup():
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5001)

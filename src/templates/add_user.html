@@ -3,30 +3,45 @@
 {% block title %}Add User{% endblock %}
 
 {% block content %}
-<div class="mt-4">
-  <h1>Add a New User</h1>
-  <form action="{{ url_for('add_user') }}" method="post" enctype="multipart/form-data">
-    <div class="form-group">
-      <label for="householdSelect">Household</label>
-      <select class="form-control" id="householdSelect" name="household_id">
-        {% for household in households %}
-        <option value="{{ household.id }}">{{ household.name }}</option>
-        {% endfor %}
-      </select>
+<h1 class="mt-4">Add a New User</h1>
+<form action="{{ url_for('add_user') }}" method="post" enctype="multipart/form-data">
+  <div class="mb-3">
+    <label for="usernameInput" class="form-label">Username</label>
+    <input type="text" class="form-control" id="usernameInput" name="username" required>
+  </div>
+  <div class="mb-3">
+    <label for="emailInput" class="form-label">Email</label>
+    <input type="email" class="form-control" id="emailInput" name="email" required>
+  </div>
+  <div class="mb-3">
+    <label for="birthdateInput" class="form-label">Birthdate</label>
+    <input type="date" class="form-control" id="birthdateInput" name="birthdate" required>
+  </div>
+  <div class="mb-3">
+    <label for="householdSelect" class="form-label">Household</label>
+    <select class="form-select" id="householdSelect" name="household_id">
+      {% for household in households %}
+      <option value="{{ household.id }}">{{ household.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="mb-3">
+    <label for="colorInput" class="form-label">User Color</label>
+    <input type="color" class="form-control form-control-color" id="colorInput" name="color" value="#3498db">
+  </div>
+  <div class="mb-3">
+    <label for="avatarInput" class="form-label">Upload Avatar</label>
+    <input type="file" class="form-control" id="avatarInput" name="avatar">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Assign to Chores</label>
+    <div class="form-check">
+      {% for chore in chores %}
+      <input class="form-check-input" type="checkbox" name="chores" value="{{ chore.id }}" id="chore{{ chore.id }}">
+      <label class="form-check-label" for="chore{{ chore.id }}">{{ chore.name }}</label><br>
+      {% endfor %}
     </div>
-    <div class="form-group">
-      <label for="usernameInput">Username</label>
-      <input type="text" class="form-control" id="usernameInput" name="username" required>
-    </div>
-    <div class="form-group">
-      <label for="emailInput">Email</label>
-      <input type="email" class="form-control" id="emailInput" name="email" required>
-    </div>
-    <div class="form-group">
-      <label for="avatarInput">Avatar</label>
-      <input type="file" class="form-control" id="avatarInput" name="avatar">
-    </div>
-    <button type="submit" class="btn btn-primary">Add User</button>
-  </form>
-</div>
+  </div>
+  <button type="submit" class="btn btn-primary">Add User</button>
+</form>
 {% endblock %}

@@ -8,28 +8,37 @@
 <table class="table table-striped">
   <thead>
     <tr>
-      <th>ID</th>
+      <!-- <th>ID</th> -->
       <th>Name</th>
       <th>Description</th>
-      <th>Frequency</th>
+      <th>Due Days</th>
+      <th>Cooldown (days)</th>
       <th>Last Completed</th>
       <th>Actions</th>
     </tr>
   </thead>
   <tbody>
     {% for chore in chores %}
-    <tr>
-      <td>{{ chore.id }}</td>
+    <tr class="chore-row" data-id="{{ chore.id }}">
+      <!-- <td>{{ chore.id }}</td> -->
       <td>{{ chore.name }}</td>
       <td>{{ chore.description }}</td>
       <td>
-        {% if chore.frequency %}
-          {{ chore.frequency.days }} day{% if chore.frequency.days != 1 %}s{% endif %}
+        {% if chore.due_days %}
+          {% if chore.due_days == "Mon,Tue,Wed,Thu,Fri" %}
+            Weekdays
+          {% elif chore.due_days == "Mon,Tue,Wed,Thu,Fri,Sat,Sun" %}
+            Everyday
+          {% elif chore.due_days == "Sat,Sun" %}
+            Weekends
+          {% else %}
+            {{ chore.due_days }}
+          {% endif %}
         {% else %}
           N/A
         {% endif %}
       </td>
-      
+      <td>{% if chore.cooldown %}{{ chore.cooldown }}{% else %}N/A{% endif %}</td>
       <td>
         {% if chore.last_completed %}
           {{ chore.last_completed.strftime("%Y-%m-%d %H:%M:%S") }}
@@ -47,4 +56,64 @@
     {% endfor %}
   </tbody>
 </table>
+
+<!-- Modal for editing a chore -->
+<div class="modal fade" id="editChoreModal" tabindex="-1" aria-labelledby="editChoreModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editChoreModalLabel">Edit Chore</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="editChoreModalBody">
+        <!-- Edit form will be loaded here -->
+        Loading...
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Attach click event listener to each table row (chore-row)
+    document.querySelectorAll(".chore-row").forEach(row => {
+      row.addEventListener("click", function () {
+        const choreId = this.getAttribute("data-id");
+        // Load the edit form via AJAX. We add ?ajax=1 so that the server knows to render only the form.
+        fetch(`/edit_chore/${choreId}?ajax=1`)
+          .then(response => response.text())
+          .then(html => {
+            document.getElementById("editChoreModalBody").innerHTML = html;
+            const modal = new bootstrap.Modal(document.getElementById("editChoreModal"));
+            modal.show();
+          })
+          .catch(error => {
+            console.error("Error loading edit form:", error);
+          });
+      });
+    });
+  });
+
+  function clearSelection() {
+    document.querySelectorAll('input[name="due_days"]').forEach(el => el.checked = false);
+  }
+
+  function selectWeekdays() {
+    // clearSelection();
+    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].forEach(day => {
+      document.getElementById('day' + day).checked = !document.getElementById('day' + day).checked;
+    });
+  }
+
+  function selectWeekends() {
+    // clearSelection();
+    ['Sat', 'Sun'].forEach(day => {
+      document.getElementById('day' + day).checked = !document.getElementById('day' + day).checked;
+    });
+  }
+</script>
+{% endblock %}
+
+
