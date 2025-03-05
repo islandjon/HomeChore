@@ -53,6 +53,11 @@
         <label class="form-check-label" for="daySun">Sun</label>
       </div>
     </div>
+    <div class="mt-2">
+      <button type="button" class="btn btn-primary btn-sm" onclick="selectWeekdays()">Weekdays</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="selectWeekends()">Weekends</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="clearSelection()">Clear</button>
+    </div>
     <div class="mb-3">
       <label for="cooldownInput" class="form-label">Cooldown (in days)</label>
       <input type="number" class="form-control" id="cooldownInput" name="cooldown" value="1" min="0" required>
@@ -69,6 +74,29 @@
     </div>  
     
     <button type="submit" class="btn btn-primary">Add Chore</button>
+    <a href="{{ url_for('manage_chores') }}" class="btn btn-secondary">Cancel</a>
   </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function clearSelection() {
+  document.querySelectorAll('input[name="due_days"]').forEach(el => el.checked = false);
+}
+
+function selectWeekdays() {
+  // clearSelection();
+  ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].forEach(day => {
+    document.getElementById('day' + day).checked = !document.getElementById('day' + day).checked;
+  });
+}
+
+function selectWeekends() {
+  // clearSelection();
+  ['Sat', 'Sun'].forEach(day => {
+    document.getElementById('day' + day).checked = !document.getElementById('day' + day).checked;
+  });
+}
+</script>
 {% endblock %}

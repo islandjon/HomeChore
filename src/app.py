@@ -141,20 +141,28 @@ def add_chore():
         except Exception:
             cooldown_val = 1  # default to 1 day if conversion fails
 
+        selected_assignee_ids = request.form.getlist('assignees')
+        # Update many-to-many relationship: assign allowed users.
+        assignees = User.query.filter(User.id.in_(selected_assignee_ids)).all()
+
         new_chore = Chore(
             household_id=household_id,
             name=name,
             description=description,
             due_days=due_days_str,
             cooldown=cooldown_val,
-            last_completed=None
+            last_completed=None,
+            assignees=assignees
         )
         db.session.add(new_chore)
         db.session.commit()
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('manage_chores'))
     else:
         households = Household.query.all()
-        return render_template('add_chore.html', households=households)
+        users = User.query.all()  # Fetch all users for the multi-select list.
+        # Sort users by birthdate and then by username
+        users = sorted(users, key=lambda u: (u.birthdate, u.username))
+        return render_template('add_chore.html', households=households, users=users)
 
 
 def get_next_assignee(chore):
@@ -216,7 +224,7 @@ def manage_chores():
     # List all chores in a table
     chores = Chore.query.all()
     # Sort chores by household and then by name
-    chores = sorted(chores, key=lambda c: (c.household_id, c.name))
+    chores = sorted(chores, key=lambda c: (c.name))
     return render_template('manage_chores.html', chores=chores)
 
 
