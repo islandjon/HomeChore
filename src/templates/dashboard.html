@@ -101,6 +101,7 @@
       <img src="{{ url_for('static', filename='avatars/' ~ data.user.avatar) }}" 
            alt="{{ data.user.username }}" class="avatar-img">
       <h4 class="text-white">{{ data.user.username }}</h4>
+      <p class="text-white">Points: {{ data.user.points }}</p>
     </div>
     <hr class="text-white">
 
