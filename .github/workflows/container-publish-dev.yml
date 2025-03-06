@@ -1,0 +1,27 @@
+name: Publish Docker Image
+
+on:
+  push:
+    branches:
+      - dev  # Build on every push to main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+
+      - name: Build Docker Image
+        run: |
+          docker build -t ghcr.io/islandjon/homechore:dev .
+          docker tag ghcr.io/islandjon/homechore:dev ghcr.io/islandjon/homechore:dev-$(date +%Y%m%d)
+
+      - name: Push Docker Image
+        run: |
+          docker push ghcr.io/islandjon/homechore:dev
+          docker push ghcr.io/islandjon/homechore:dev-$(date +%Y%m%d)
