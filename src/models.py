@@ -14,7 +14,7 @@ class Household(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), unique=True, nullable=False, default="Default Household")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    users = db.relationship("User", backref="household", lazy=True)
+    users = db.relationship("User", back_populates="household")
     chores = db.relationship("Chore", backref="household", lazy=True)
 
 class User(db.Model):
@@ -24,11 +24,12 @@ class User(db.Model):
     username = db.Column(db.String(255), unique=True, nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=False)
     avatar = db.Column(db.String(255), nullable=True, default="default_avatar.png")
-    color = db.Column(db.String(7), nullable=False, default="#3498db")  # Default color blue
-    birthdate = db.Column(db.Date, nullable=True)  # New birthdate field
+    color = db.Column(db.String(7), nullable=False, default="#3498db")
+    birthdate = db.Column(db.Date, nullable=True)
+    points = db.Column(db.Integer, nullable=False, default=0)  # New points field
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    # household = db.relationship("Household", backref="users")
-
+    notifications = db.relationship("Notification", backref="user", lazy=True)
+    household = db.relationship("Household", back_populates="users")
 
 class Chore(db.Model):
     __tablename__ = 'chores'
@@ -36,18 +37,16 @@ class Chore(db.Model):
     household_id = db.Column(db.Integer, db.ForeignKey('households.id'), nullable=False)
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, default="No description provided.")
-    # New column for storing specific due days, e.g., "Mon,Wed,Fri"
-    due_days = db.Column(db.String(255), nullable=True)
-    cooldown = db.Column(db.Integer, nullable=True, default=1)
+    due_days = db.Column(db.String(255), nullable=True)  # e.g., "Mon,Wed,Fri"
     last_completed = db.Column(db.DateTime, default=None)
-    # This field holds the currently assigned user ID
     assigned_to = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    point_value = db.Column(db.Integer, nullable=False, default=10)  # New point_value field
+    cooldown = db.Column(db.Integer, nullable=True, default=1)  # Existing cooldown field
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    # Many-to-many relationship for allowed assignees
     assignees = db.relationship('User', secondary=chore_assignees,
                                 backref=db.backref('assigned_chores', lazy='dynamic'))
     notifications = db.relationship("Notification", backref="chore", lazy=True)
-    # Relationship to easily access the current assigned user as an object
+    # Relationship to get the currently assigned user
     current_assignee = db.relationship("User", foreign_keys=[assigned_to], lazy=True)
 
 class Notification(db.Model):

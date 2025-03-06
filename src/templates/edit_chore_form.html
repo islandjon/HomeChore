@@ -50,6 +50,11 @@
     <label for="cooldownInput" class="form-label">Cooldown (in days)</label>
     <input type="number" class="form-control" id="cooldownInput" name="cooldown" value="{{ chore.cooldown or 1 }}" min="0" required>
   </div>
+  <!-- Point value -->
+  <div class="mb-3">
+    <label for="pointValueInput" class="form-label">Point Value</label>
+    <input type="number" class="form-control" id="pointValueInput" name="point_value" value="{{ chore.point_value or 10 }}" min="0" required>
+  </div>
   <!-- Assign users -->
   <div class="mb-3">
     <label class="form-label">Assign to Users</label>

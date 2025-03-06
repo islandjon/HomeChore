@@ -126,7 +126,7 @@ def settings():
     current_tz = session.get('timezone', 'UTC')
     return render_template('settings.html', timezones=common_timezones, current_tz=current_tz)
 
-
+        
 @app.route('/add_chore', methods=['GET', 'POST'])
 def add_chore():
     if request.method == 'POST':
@@ -136,10 +136,15 @@ def add_chore():
         due_days = request.form.getlist('due_days')
         due_days_str = ",".join([day.strip() for day in due_days]) if due_days else None
         cooldown_input = request.form.get('cooldown')
+        point_value_input = request.form.get('point_value')
         try:
             cooldown_val = int(cooldown_input)
         except Exception:
-            cooldown_val = 1  # default to 1 day if conversion fails
+            cooldown_val = 1
+        try:
+            point_value_val = int(point_value_input)
+        except Exception:
+            point_value_val = 10  # default point value
 
         selected_assignee_ids = request.form.getlist('assignees')
         # Update many-to-many relationship: assign allowed users.
@@ -151,6 +156,7 @@ def add_chore():
             description=description,
             due_days=due_days_str,
             cooldown=cooldown_val,
+            point_value=point_value_val,
             last_completed=None,
             assignees=assignees
         )
@@ -158,7 +164,9 @@ def add_chore():
         db.session.commit()
         return redirect(url_for('manage_chores'))
     else:
+        # Fetch all households for the dropdown list.
         households = Household.query.all()
+        # Fetch all users for the multi-select list.
         users = User.query.all()  # Fetch all users for the multi-select list.
         # Sort users by birthdate and then by username
         users = sorted(users, key=lambda u: (u.birthdate, u.username))
@@ -193,29 +201,36 @@ def get_next_assignee(chore):
 @app.route('/complete_chore', methods=['POST'])
 def complete_chore():
     chore_id = request.form.get('chore_id')
-    user_id = request.form.get('user_id')  # Ensure this is captured
+    user_id = request.form.get('user_id')
     chore = Chore.query.get(chore_id)
 
     if chore and user_id:
         chore.last_completed = datetime.utcnow()
-        chore.assigned_to = int(user_id)  # Assign to the selected user
+        chore.assigned_to = int(user_id)
         db.session.commit()
 
-        # Log completion in ChoreCompletion table
+        # Record completion in ChoreCompletion table
         completion = ChoreCompletion(chore_id=chore.id, user_id=int(user_id))
         db.session.add(completion)
         db.session.commit()
+
+        # Award points to the user
+        user = User.query.get(int(user_id))
+        if user:
+            user.points += chore.point_value
+            db.session.commit()
 
         # Add a notification
         notification = Notification(
             user_id=int(user_id),
             chore_id=chore.id,
-            message=f"You completed '{chore.name}' on {chore.last_completed.strftime('%Y-%m-%d %H:%M:%S')}"
+            message=f"You earned {chore.point_value} points for completing '{chore.name}' on {chore.last_completed.strftime('%Y-%m-%d %H:%M:%S')}"
         )
         db.session.add(notification)
         db.session.commit()
 
     return redirect(url_for('dashboard'))
+
 
 
 
@@ -245,17 +260,21 @@ def edit_chore(chore_id):
         # Update many-to-many relationship: assign allowed users.
         chore.assignees = User.query.filter(User.id.in_(selected_assignee_ids)).all()
         cooldown_input = request.form.get('cooldown')
+        point_value_input = request.form.get('point_value')
         try:
             chore.cooldown = int(cooldown_input)
         except Exception:
             chore.cooldown = 1
+        try:
+            chore.point_value = int(point_value_input)
+        except Exception:
+            chore.point_value = 10
         db.session.commit()
         return redirect(url_for('manage_chores'))
     if request.args.get('ajax'):
         return render_template('edit_chore_form.html', chore=chore, users=users)
     else:
         return render_template('edit_chore.html', chore=chore, users=users)
-
 
 
 @app.route('/delete_chore/<int:chore_id>', methods=['POST'])
