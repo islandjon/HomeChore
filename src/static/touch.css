@@ -1,0 +1,32 @@
+
+@media (pointer: coarse) {
+    /* Increase tap target sizes for cards and buttons */
+    .card {
+      padding: 15px;
+      margin-bottom: 15px;
+      font-size: 1.1rem;
+    }
+    
+    .btn, .user-select-btn {
+      padding: 12px 20px;
+      font-size: 1.2rem;
+    }
+    
+    /* Increase spacing in user columns */
+    .user-column {
+      padding: 20px;
+      margin: 8px;
+    }
+    
+    /* Adjust table row height if needed */
+    table.table tr {
+      min-height: 48px;
+    }
+  }
+  
+  /* Optionally, add touch-friendly active states */
+  .btn:active, .card:active, .user-select-btn:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+  }
+  

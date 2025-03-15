@@ -26,14 +26,14 @@ def localtime_filter(dt):
     if not dt:
         return "Never"
     # Get the user's timezone from the session (default to UTC)
-    tz_name = session.get('timezone', 'UTC')
+    tz_name = session.get('timezone', 'US/Eastern')
     timezone = pytz.timezone(tz_name)
     # Convert dt (assumed to be UTC) to the selected timezone
     local_dt = dt.replace(tzinfo=pytz.utc).astimezone(timezone)
     # Return a formatted string in Day Month format
     return local_dt.strftime("%a %b %d, %I:%M %p")
 
-def calculate_next_due_date(last_date, due_days):
+def calculate_next_due_date(last_date, due_days, cooldown_days):
     """
     Given last_date (a date object) and due_days (a comma-separated string like "Mon,Wed,Fri"),
     returns the next date (after last_date) whose weekday is in due_days.
@@ -43,12 +43,31 @@ def calculate_next_due_date(last_date, due_days):
     weekday_map = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
     due_weekdays = [weekday_map[day] for day in due_day_list if day in weekday_map]
 
-    for days_ahead in range(1, 8):  # Check the next 7 days
-        next_date = last_date + timedelta(days=days_ahead)
-        if next_date.weekday() in due_weekdays:
-            return next_date
-    return last_date  # fallback
+    # Find the next available date based on the last completion date and cooldown days
+    next_date = last_date + timedelta(days=cooldown_days)
+    while next_date.weekday() not in due_weekdays:
+        next_date += timedelta(days=1)
+    return next_date
 
+def get_next_assignee(chore):
+    """
+    Given a chore, determine the next assignee among its assignees:
+    Return the user who has never completed the chore or who did it longest ago.
+    """
+    # Get the list of users assigned to this chore
+    assignees = chore.assignees
+    next_assignee = []
+    oldest_completion = None
+    
+    # Sort the assignees by the date of their last completion (oldest first) and return the list
+    for user in assignees:
+        # Find the oldest completion date for this user
+        oldest_completion = ChoreCompletion.query.filter_by(chore_id=chore.id, user_id=user.id).order_by(ChoreCompletion.completed_at.asc()).first()
+        if oldest_completion:
+            next_assignee.append(user)
+        else:
+            return None
+    return next_assignee
 
 @app.route('/')
 def dashboard():
@@ -56,16 +75,18 @@ def dashboard():
     timezone = pytz.timezone(tz_name)
     now = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(timezone)
     today_date = now.date()
-    today_day = now.strftime("%a")  # e.g. "Mon", "Tue", etc.
 
     users = User.query.order_by(User.birthdate.asc()).all()
-    user_chores = {}
+    user_chores = {user.id: {'user': user, 'overdue': [], 'due_today': [], 'other_tasks': []} for user in users}
+
+    # Assign chores to users based on the next assignee logic and the number of chores currently in thier overdue, due_today, and other_tasks lists.    
 
     for user in users:
         # Get chores assigned to this user and sort them alphabetically.
         assigned_chores = sorted(user.assigned_chores, key=lambda c: c.name.lower())
         due_today = []
         other_tasks = []
+        overdue = []
 
         for chore in assigned_chores:
             
@@ -79,30 +100,28 @@ def dashboard():
             if chore.last_completed:
                 last_completed_date = chore.last_completed.date()
                 cooldown_days = chore.cooldown if chore.cooldown is not None else 1
-                next_available_date = last_completed_date + timedelta(days=cooldown_days)
+                # Calculate the next available date based on the cooldown and day of the week.
+                next_available_date = calculate_next_due_date(last_completed_date, chore.due_days, cooldown_days)
+
             else:
                 # If never completed, it's available immediately.
                 next_available_date = today_date
 
             # If today is before the next available date, skip this chore.
-            if today_date < next_available_date:
-                continue
+            if next_available_date.isocalendar() < today_date.isocalendar():
+                overdue.append(chore)
 
-            # Categorize the chore based on its due_days setting.
-            if chore.due_days:
-                # Split due_days into a list, trimming whitespace.
-                due_day_list = [d.strip() for d in chore.due_days.split(',')]
-                if today_day in due_day_list:
-                    due_today.append(chore)
-                else:
-                    other_tasks.append(chore)
-            else:
-                # If no due_days are set, default to due today.
+            elif next_available_date.isocalendar() == today_date.isocalendar():
+                # If the chore is due today, add it to the due_today list.
                 due_today.append(chore)
+            else:
+                # Otherwise, add it to the other_tasks list.
+                other_tasks.append(chore)
             
 
         user_chores[user.id] = {
             'user': user,
+            'overdue': overdue,
             'due_today': due_today,
             'other_tasks': other_tasks
         }
@@ -171,32 +190,6 @@ def add_chore():
         # Sort users by birthdate and then by username
         users = sorted(users, key=lambda u: (u.birthdate, u.username))
         return render_template('add_chore.html', households=households, users=users)
-
-
-def get_next_assignee(chore):
-    """
-    Given a chore, determine the next assignee among its assignees:
-    Return the user who has never completed the chore or who did it longest ago.
-    """
-    # Get the list of users assigned to this chore
-    assignees = chore.assignees
-    next_assignee = None
-    oldest_completion = None
-    
-    for user in assignees:
-        # Get the most recent completion for this chore by this user
-        completion = (ChoreCompletion.query
-                      .filter_by(chore_id=chore.id, user_id=user.id)
-                      .order_by(ChoreCompletion.completed_at.desc())
-                      .first())
-        if completion is None:
-            # If the user has never completed the chore, return immediately.
-            return user
-        else:
-            if oldest_completion is None or completion.completed_at < oldest_completion:
-                oldest_completion = completion.completed_at
-                next_assignee = user
-    return next_assignee
 
 @app.route('/complete_chore', methods=['POST'])
 def complete_chore():

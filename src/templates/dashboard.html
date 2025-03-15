@@ -62,7 +62,12 @@
     border-radius: 50%;
     margin-bottom: 10px;
   }
-
+  
+  /* Overdue card styling */
+  .overdue {
+    border: 2px solid red;
+  }
+  
   /* Modal user selection buttons */
   .user-select-btn {
     border: none;
@@ -104,6 +109,17 @@
       <p class="text-white">Points: {{ data.user.points }}</p>
     </div>
     <hr class="text-white">
+    
+    <!-- Overdue -->
+    {% for chore in data.overdue %}
+    <div class="card user-card overdue" data-id="{{ chore.id }}" data-user="{{ data.user.id }}" data-name="{{ chore.name }}">
+      <h5>{{ chore.name }}</h5>
+      <p>{{ chore.description }}</p>
+      <small>
+        Last Completed: {{ chore.last_completed | localtime }} by {{ chore.last_completed_by or "N/A" }}
+      </small>
+    </div>
+    {% endfor %}
 
     <!-- Due Today -->
     {% for chore in data.due_today %}
