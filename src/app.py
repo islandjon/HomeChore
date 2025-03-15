@@ -21,6 +21,60 @@ db.init_app(app)
 # Initialize the migration engine
 migrate = Migrate(app, db)
 
+# In app.py, add a new configuration variable:
+app.config['MAX_TASKS_PER_DAY'] = 3  # adjust as needed
+
+
+def assign_chore(chore, today_date):
+    """
+    For an unassigned chore that is due (or overdue), assign it to the candidate
+    with the fewest chores due today or overdue, provided that candidate’s count is below the limit.
+    """
+    # If already assigned, do nothing.
+    if chore.assigned_to is not None:
+        return
+
+    # Determine the chore's next available due date.
+    if chore.last_completed:
+        last_completed_date = chore.last_completed.date()
+        cooldown_days = chore.cooldown if chore.cooldown is not None else 1
+        next_available_date = calculate_next_due_date(last_completed_date, chore.due_days, cooldown_days)
+    else:
+        next_available_date = today_date
+
+    # Only assign if the chore is due (or overdue)
+    if next_available_date <= today_date:
+        max_tasks = app.config.get('MAX_TASKS_PER_DAY', 3)
+        candidate = None
+        candidate_min_count = None
+
+        # Iterate over candidate users
+        for user in chore.assignees:
+            # Count the number of chores assigned to this user that are due today or overdue.
+            assigned_count = 0
+            # Query all chores where this user is the current assignee.
+            assigned_chores = Chore.query.filter_by(assigned_to=user.id).all()
+            for ac in assigned_chores:
+                if ac.last_completed:
+                    ac_due = calculate_next_due_date(ac.last_completed.date(), ac.due_days, ac.cooldown if ac.cooldown is not None else 1)
+                else:
+                    ac_due = today_date
+                if ac_due <= today_date:
+                    assigned_count += 1
+
+            # If this candidate is below the threshold, compare counts.
+            if assigned_count < max_tasks:
+                if candidate is None or assigned_count < candidate_min_count:
+                    candidate = user
+                    candidate_min_count = assigned_count
+
+        # If a candidate was found, assign the chore.
+        if candidate:
+            chore.assigned_to = candidate.id
+            db.session.add(chore)
+            db.session.commit()
+
+
 @app.template_filter('localtime')
 def localtime_filter(dt):
     if not dt:
@@ -33,6 +87,7 @@ def localtime_filter(dt):
     # Return a formatted string in Day Month format
     return local_dt.strftime("%a %b %d, %I:%M %p")
 
+
 def calculate_next_due_date(last_date, due_days, cooldown_days):
     """
     Given last_date (a date object) and due_days (a comma-separated string like "Mon,Wed,Fri"),
@@ -40,14 +95,17 @@ def calculate_next_due_date(last_date, due_days, cooldown_days):
     """
     due_day_list = [day.strip() for day in due_days.split(',')]
     # Mapping of weekday abbreviations to numbers (Monday=0, Sunday=6)
-    weekday_map = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
-    due_weekdays = [weekday_map[day] for day in due_day_list if day in weekday_map]
+    weekday_map = {"Mon": 0, "Tue": 1, "Wed": 2,
+                   "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
+    due_weekdays = [weekday_map[day]
+                    for day in due_day_list if day in weekday_map]
 
     # Find the next available date based on the last completion date and cooldown days
     next_date = last_date + timedelta(days=cooldown_days)
     while next_date.weekday() not in due_weekdays:
         next_date += timedelta(days=1)
     return next_date
+
 
 def get_next_assignee(chore):
     """
@@ -58,11 +116,12 @@ def get_next_assignee(chore):
     assignees = chore.assignees
     next_assignee = []
     oldest_completion = None
-    
+
     # Sort the assignees by the date of their last completion (oldest first) and return the list
     for user in assignees:
         # Find the oldest completion date for this user
-        oldest_completion = ChoreCompletion.query.filter_by(chore_id=chore.id, user_id=user.id).order_by(ChoreCompletion.completed_at.asc()).first()
+        oldest_completion = ChoreCompletion.query.filter_by(
+            chore_id=chore.id, user_id=user.id).order_by(ChoreCompletion.completed_at.asc()).first()
         if oldest_completion:
             next_assignee.append(user)
         else:
@@ -76,58 +135,79 @@ def dashboard():
     now = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(timezone)
     today_date = now.date()
 
-    users = User.query.order_by(User.birthdate.asc()).all()
-    user_chores = {user.id: {'user': user, 'overdue': [], 'due_today': [], 'other_tasks': []} for user in users}
+    chores = Chore.query.all()
 
-    # Assign chores to users based on the next assignee logic and the number of chores currently in thier overdue, due_today, and other_tasks lists.    
+    # For each chore, determine the display value for the last completed by field.
+    for chore in chores:
+        if chore.last_completed_by is not None:
+            user_obj = User.query.get(chore.last_completed_by)
+            # Use the stored last completer's username.
+            chore.last_completed_by_display = user_obj.username if user_obj else "Unknown"
+            print(chore.last_completed_by_display)
+        else:
+            chore.last_completed_by_display = "N/A"
 
-    for user in users:
-        # Get chores assigned to this user and sort them alphabetically.
-        assigned_chores = sorted(user.assigned_chores, key=lambda c: c.name.lower())
-        due_today = []
-        other_tasks = []
-        overdue = []
-
-        for chore in assigned_chores:
-            
-            if chore.assigned_to:
-                user_obj = User.query.get(chore.assigned_to)
-                chore.last_completed_by = user_obj.username if user_obj else "Unknown"
-            else:
-                chore.last_completed_by = "N/A"
-            
-            # Determine the next available date based on the cooldown.
+        # (Auto-assignment logic remains as before.)
+        if chore.assigned_to is None:
             if chore.last_completed:
                 last_completed_date = chore.last_completed.date()
                 cooldown_days = chore.cooldown if chore.cooldown is not None else 1
-                # Calculate the next available date based on the cooldown and day of the week.
                 next_available_date = calculate_next_due_date(last_completed_date, chore.due_days, cooldown_days)
-
             else:
-                # If never completed, it's available immediately.
                 next_available_date = today_date
 
-            # If today is before the next available date, skip this chore.
-            if next_available_date.isocalendar() < today_date.isocalendar():
-                overdue.append(chore)
+            if next_available_date <= today_date:
+                assign_chore(chore, today_date)
 
-            elif next_available_date.isocalendar() == today_date.isocalendar():
-                # If the chore is due today, add it to the due_today list.
-                due_today.append(chore)
+    # Group chores by assigned user (and also collect unassigned ones).
+    users = User.query.order_by(User.birthdate.asc()).all()
+    user_chores = {user.id: {'user': user, 'overdue': [], 'due_today': [], 'other_tasks': []} for user in users}
+    unassigned = []
+
+    for chore in chores:
+        if chore.last_completed:
+            last_completed_date = chore.last_completed.date()
+            cooldown_days = chore.cooldown if chore.cooldown is not None else 1
+            next_available_date = calculate_next_due_date(last_completed_date, chore.due_days, cooldown_days)
+        else:
+            next_available_date = today_date
+
+        if next_available_date < today_date:
+            status = 'overdue'
+        elif next_available_date == today_date:
+            status = 'due_today'
+        else:
+            status = 'other_tasks'
+
+        if chore.assigned_to:
+            if chore.assigned_to in user_chores:
+                user_chores[chore.assigned_to][status].append(chore)
+        else:
+            unassigned.append(chore)
+        
+        if chore.last_completed_by is not None:
+            user_obj = User.query.get(chore.last_completed_by)
+            # Use the stored last completer's username.
+            chore.last_completed_by_display = user_obj.username if user_obj else "Unknown"
+        else:
+            chore.last_completed_by_display = "N/A"
+
+        # (Auto-assignment logic remains as before.)
+        if chore.assigned_to is None:
+            if chore.last_completed:
+                last_completed_date = chore.last_completed.date()
+                cooldown_days = chore.cooldown if chore.cooldown is not None else 1
+                next_available_date = calculate_next_due_date(last_completed_date, chore.due_days, cooldown_days)
             else:
-                # Otherwise, add it to the other_tasks list.
-                other_tasks.append(chore)
-            
+                next_available_date = today_date
 
-        user_chores[user.id] = {
-            'user': user,
-            'overdue': overdue,
-            'due_today': due_today,
-            'other_tasks': other_tasks
-        }
+            if next_available_date <= today_date:
+                assign_chore(chore, today_date)
+        
+        print(chore.last_completed_by_display)
 
-    return render_template('dashboard.html', user_chores=user_chores, timezone=tz_name)
 
+    return render_template('dashboard.html', user_chores=user_chores, unassigned=unassigned, timezone=tz_name)
 
 
 @app.route('/settings', methods=['GET', 'POST'])
@@ -145,7 +225,7 @@ def settings():
     current_tz = session.get('timezone', 'UTC')
     return render_template('settings.html', timezones=common_timezones, current_tz=current_tz)
 
-        
+
 @app.route('/add_chore', methods=['GET', 'POST'])
 def add_chore():
     if request.method == 'POST':
@@ -153,7 +233,8 @@ def add_chore():
         name = request.form.get('name')
         description = request.form.get('description')
         due_days = request.form.getlist('due_days')
-        due_days_str = ",".join([day.strip() for day in due_days]) if due_days else None
+        due_days_str = ",".join([day.strip()
+                                for day in due_days]) if due_days else None
         cooldown_input = request.form.get('cooldown')
         point_value_input = request.form.get('point_value')
         try:
@@ -191,40 +272,53 @@ def add_chore():
         users = sorted(users, key=lambda u: (u.birthdate, u.username))
         return render_template('add_chore.html', households=households, users=users)
 
+
 @app.route('/complete_chore', methods=['POST'])
 def complete_chore():
     chore_id = request.form.get('chore_id')
-    user_id = request.form.get('user_id')
+    user_input = request.form.get('user_id')  # This might be a username like "Aspyn"
     chore = Chore.query.get(chore_id)
 
-    if chore and user_id:
-        chore.last_completed = datetime.utcnow()
-        chore.assigned_to = int(user_id)
+    if chore and user_input:
+        # Try to convert user_input to an integer.
+        try:
+            user_id = int(user_input)
+        except ValueError:
+            # If conversion fails, assume user_input is a username.
+            user_obj = User.query.filter_by(username=user_input).first()
+            if user_obj:
+                user_id = user_obj.id
+            else:
+                # Optionally, handle the error if no such user exists.
+                return redirect(url_for('dashboard'))
+
+        now = datetime.utcnow()
+        chore.last_completed = now
+        chore.assigned_to = user_id
+        chore.last_completed_by = user_id  # Save as an integer user id.
         db.session.commit()
 
-        # Record completion in ChoreCompletion table
-        completion = ChoreCompletion(chore_id=chore.id, user_id=int(user_id))
+        # Record the completion for history.
+        completion = ChoreCompletion(chore_id=chore.id, user_id=user_id)
         db.session.add(completion)
         db.session.commit()
 
-        # Award points to the user
-        user = User.query.get(int(user_id))
+        # Award points to the user.
+        user = User.query.get(user_id)
         if user:
             user.points += chore.point_value
             db.session.commit()
 
-        # Add a notification
+        # Add a notification.
         notification = Notification(
-            user_id=int(user_id),
+            user_id=user_id,
             chore_id=chore.id,
-            message=f"You earned {chore.point_value} points for completing '{chore.name}' on {chore.last_completed.strftime('%Y-%m-%d %H:%M:%S')}"
+            message=f"You earned {chore.point_value} points for completing '{chore.name}' on {now.strftime('%Y-%m-%d %H:%M:%S')}"
         )
         db.session.add(notification)
         db.session.commit()
 
     return redirect(url_for('dashboard'))
-
-
 
 
 @app.route('/manage_chores')
@@ -234,6 +328,7 @@ def manage_chores():
     # Sort chores by household and then by name
     chores = sorted(chores, key=lambda c: (c.name))
     return render_template('manage_chores.html', chores=chores)
+
 
 
 @app.route('/edit_chore/<int:chore_id>', methods=['GET', 'POST'])
@@ -247,11 +342,13 @@ def edit_chore(chore_id):
         chore.name = request.form.get('name')
         chore.description = request.form.get('description')
         due_days = request.form.getlist('due_days')
-        chore.due_days = ",".join([day.strip() for day in due_days]) if due_days else None
+        chore.due_days = ",".join([day.strip()
+                                  for day in due_days]) if due_days else None
         # Process allowed assignees from multi-select
         selected_assignee_ids = request.form.getlist('assignees')
         # Update many-to-many relationship: assign allowed users.
-        chore.assignees = User.query.filter(User.id.in_(selected_assignee_ids)).all()
+        chore.assignees = User.query.filter(
+            User.id.in_(selected_assignee_ids)).all()
         cooldown_input = request.form.get('cooldown')
         point_value_input = request.form.get('point_value')
         try:
@@ -270,12 +367,14 @@ def edit_chore(chore_id):
         return render_template('edit_chore.html', chore=chore, users=users)
 
 
+
 @app.route('/delete_chore/<int:chore_id>', methods=['POST'])
 def delete_chore(chore_id):
     chore = Chore.query.get_or_404(chore_id)
     db.session.delete(chore)
     db.session.commit()
     return redirect(url_for('manage_chores'))
+
 
 
 @app.route('/manage_users')
@@ -295,7 +394,8 @@ def add_user():
         avatar_file = request.files.get('avatar')
 
         # Convert birthdate string to date format
-        birthdate = datetime.strptime(birthdate, "%Y-%m-%d").date() if birthdate else None
+        birthdate = datetime.strptime(
+            birthdate, "%Y-%m-%d").date() if birthdate else None
 
         # Handle avatar upload
         if avatar_file and avatar_file.filename:
@@ -312,7 +412,8 @@ def add_user():
 
         # Assign selected chores
         selected_chores = request.form.getlist('chores')
-        new_user.assigned_chores = Chore.query.filter(Chore.id.in_(selected_chores)).all()
+        new_user.assigned_chores = Chore.query.filter(
+            Chore.id.in_(selected_chores)).all()
         db.session.commit()
 
         return redirect(url_for('dashboard'))
@@ -322,7 +423,6 @@ def add_user():
     return render_template('add_user.html', households=households, chores=chores)
 
 
-@app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
 @app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
 def edit_user(user_id):
     user = User.query.get_or_404(user_id)
@@ -334,7 +434,8 @@ def edit_user(user_id):
         user.color = request.form.get('color', '#3498db')
 
         birthdate = request.form.get('birthdate')
-        user.birthdate = datetime.strptime(birthdate, "%Y-%m-%d").date() if birthdate else None
+        user.birthdate = datetime.strptime(
+            birthdate, "%Y-%m-%d").date() if birthdate else None
 
         avatar_file = request.files.get('avatar')
         if avatar_file and avatar_file.filename:
@@ -345,7 +446,8 @@ def edit_user(user_id):
 
         # Update chore assignments
         selected_chores = request.form.getlist('chores')
-        user.assigned_chores = Chore.query.filter(Chore.id.in_(selected_chores)).all()
+        user.assigned_chores = Chore.query.filter(
+            Chore.id.in_(selected_chores)).all()
 
         db.session.commit()
         return redirect(url_for('dashboard'))

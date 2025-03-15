@@ -116,8 +116,9 @@
       <h5>{{ chore.name }}</h5>
       <p>{{ chore.description }}</p>
       <small>
-        Last Completed: {{ chore.last_completed | localtime }} by {{ chore.last_completed_by or "N/A" }}
+        Last Completed: {{ chore.last_completed | localtime }} by {{ chore.last_completed_by_display }}
       </small>
+      
     </div>
     {% endfor %}
 
@@ -127,7 +128,7 @@
       <h5>{{ chore.name }}</h5>
       <p>{{ chore.description }}</p>
       <small>
-        Last Completed: {{ chore.last_completed | localtime }} by {{ chore.last_completed_by or "N/A" }}
+        Last Completed: {{ chore.last_completed | localtime }} by {{ chore.last_completed_by_display or "N/A" }}
       </small>
       
     </div>
@@ -139,7 +140,7 @@
       <h5>{{ chore.name }}</h5>
       <p>{{ chore.description }}</p>
       <small>
-        Last Completed: {{ chore.last_completed | localtime }} by {{ chore.last_completed_by or "N/A" }}
+        Last Completed: {{ chore.last_completed | localtime }} by {{ chore.last_completed_by_display or "N/A" }}
       </small>
       
     </div>

@@ -39,15 +39,17 @@ class Chore(db.Model):
     description = db.Column(db.Text, default="No description provided.")
     due_days = db.Column(db.String(255), nullable=True)  # e.g., "Mon,Wed,Fri"
     last_completed = db.Column(db.DateTime, default=None)
-    assigned_to = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    point_value = db.Column(db.Integer, nullable=False, default=10)  # New point_value field
-    cooldown = db.Column(db.Integer, nullable=True, default=1)  # Existing cooldown field
+    assigned_to = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+    point_value = db.Column(db.Integer, nullable=False, default=10)
+    cooldown = db.Column(db.Integer, nullable=True, default=1)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     assignees = db.relationship('User', secondary=chore_assignees,
                                 backref=db.backref('assigned_chores', lazy='dynamic'))
     notifications = db.relationship("Notification", backref="chore", lazy=True)
-    # Relationship to get the currently assigned user
     current_assignee = db.relationship("User", foreign_keys=[assigned_to], lazy=True)
+    # New column to record who last completed the chore:
+    last_completed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
 
 class Notification(db.Model):
     __tablename__ = 'notifications'
